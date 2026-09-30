@@ -1,0 +1,12 @@
+# audio and generated data stay local
+*.wav
+*.flac
+*.mp3
+outputs/
+listening/*/pairs/
+listening/*/key.csv
+testset/references/*.wav
+testset/ground_truth/
+scores/*.csv
+__pycache__/
+.DS_Store
