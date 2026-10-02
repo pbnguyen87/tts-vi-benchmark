@@ -36,7 +36,7 @@
 <tr><td>Sampling</td><td>GPT-2 sampling + CFG in S2A</td><td>temperature 1.15, top-k 106, min-p 0.18, repetition penalty 1.2; accurate / expressive modes</td></tr>
 <tr><td>Fine-tunable parts</td><td>T2S full fine-tune; S2A optional; w2v-BERT, MaskGCT, Mistral embedding frozen</td><td>LoRA on the backbone; speaker encoder and DAC frozen</td></tr>
 <tr><td>Emotion / speed control</td><td>Through the reference and the CAM++ style vector</td><td>Speed parameter, emotion vector, quality values</td></tr>
-<tr><td>Vietnamese in pretraining</td><td>Not reported, mainly zh/en</td><td>Not reported, multilingual but Vietnamese not listed</td></tr>
+<tr><td>Vietnamese support</td><td>Officially one of 14 supported languages. The README reports MiniMax-MLS-Test Vietnamese WER 1.61 / SIM 0.751 (reference mode) and 1.59 / 0.753 (continuation). A <code>vi</code> instruction prefix exists in the language map. Hours of Vietnamese data not disclosed.</td><td>Officially supported, listed as Tier 2 of 3 (with Korean, Russian, Italian, Portuguese, French, Spanish, German, Hebrew, Dutch); Tier 1 is English, Mandarin, Japanese. Trained on 6M+ hours of multilingual speech, no per-language breakdown and no Vietnamese benchmark numbers published.</td></tr>
 <tr><td>Output sample rate</td><td>22.05 kHz</td><td>44.1 kHz</td></tr>
 <tr><td>License</td><td>Apache 2.0</td><td>Apache 2.0</td></tr>
 </table>
