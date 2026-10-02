@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Confucius4-TTS vs ZONOS2: architecture comparison</title>
+<style>
+  @page { size: A4 landscape; margin: 14mm; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; font-size: 10.5pt; color: #1b1b1b; margin: 0; }
+  h1 { font-size: 17pt; margin: 0 0 4px; }
+  .sub { color: #555; margin: 0 0 14px; font-size: 9.5pt; }
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  th, td { border: 1px solid #c8c8c8; padding: 5px 7px; vertical-align: top; text-align: left; }
+  th { background: #eef1f5; }
+  td:first-child { font-weight: 600; width: 17%; background: #fafafa; }
+  tr { page-break-inside: avoid; }
+  h2 { font-size: 12.5pt; margin: 18px 0 6px; }
+  li { margin-bottom: 5px; }
+  code { font-family: Menlo, Consolas, monospace; font-size: 9.5pt; }
+</style></head><body>
+<h1>Confucius4-TTS vs ZONOS2: architecture comparison</h1>
+<p class="sub">Based on the released code and papers of both models. Prepared for the Vietnamese voice-cloning benchmark, October 2026.</p>
+<table>
+<tr><th>Feature</th><th>Confucius4-TTS</th><th>ZONOS2</th></tr>
+<tr><td>Architecture type</td><td>Two stages: T2S (text → semantic tokens, autoregressive) + S2A (semantic tokens → mel, flow matching) + vocoder</td><td>Single-stage decoder-only: text → acoustic codec tokens directly, then codec decoder to waveform</td></tr>
+<tr><td>Main backbone</td><td>GPT-2, 24 layers, hidden 1280, ~661M parameters</td><td>MoE Transformer, 28 layers, 16 experts, top-1/top-2 routing, 8B total, ~900M active</td></tr>
+<tr><td>Text normalizer</td><td>None for Vietnamese; our <code>normalize_vietnamese</code> runs before the model</td><td>Vendored NeMo text normalization for en/zh/ja/de/fr…; no Vietnamese, disabled with <code>text_normalization=False</code></td></tr>
+<tr><td>Text tokenizer</td><td>Mistral BPE, 32k vocab, frozen 4096-d embedding, MLP projector down to 1280</td><td>UTF-8 bytes, 256-entry vocab plus special tokens; no BPE, shared across all languages</td></tr>
+<tr><td>Language conditioning</td><td><code>lang</code> tag in the data (<code>zh</code>/<code>en</code>); Vietnamese must run as <code>en</code></td><td>Language tags such as <code>en_us</code>; Vietnamese runs as <code>en_us</code></td></tr>
+<tr><td>Speaker encoder</td><td>ECAPA-TDNN trained jointly with the model on w2v-BERT layer-17 features (T2S) + CAM++ 192-d style vector (S2A)</td><td>ECAPA-TDNN taken from Qwen3-TTS, ~12M parameters, 2048-d → LDA 1024 → projection; frozen, occupies slot 0 of the sequence</td></tr>
+<tr><td>How the reference audio is used</td><td>Two paths: speaker embedding into T2S + mel prompt into S2A (in-context)</td><td>One embedding vector only; no continuation or in-context prompt</td></tr>
+<tr><td>Reference transcript</td><td>Not needed (reference mode); continuation mode is in the paper but not released</td><td>Not needed, not supported</td></tr>
+<tr><td>Intermediate tokens</td><td>MaskGCT RepCodec semantic tokens, 8192 FVQ codes, 50 Hz, one codebook</td><td>DAC acoustic tokens at 44.1 kHz, 9 codebooks, 86 Hz (hop 512)</td></tr>
+<tr><td>Multi-codebook generation</td><td>Not applicable, one semantic stream</td><td>Delay (shear) pattern over 9 codebooks, 9 tokens predicted per step</td></tr>
+<tr><td>Acoustic stage</td><td>DiT flow matching, 13 layers, hidden 512, WaveNet head, CFG 0.7, 25 Euler steps; mel length = 1.72 × token count</td><td>No separate stage; DAC tokens go straight into the DAC decoder</td></tr>
+<tr><td>Vocoder / codec decoder</td><td>BigVGAN v2, 22.05 kHz</td><td>DAC decoder, 44.1 kHz</td></tr>
+<tr><td>End of utterance</td><td>T2S end token</td><td>EOA = 1024 followed by a 10-frame countdown</td></tr>
+<tr><td>Maximum length per generation</td><td>Text split into ~80-token segments ≈ 9 s of Vietnamese, then concatenated</td><td>2048 frames ≈ 23 s</td></tr>
+<tr><td>Sampling</td><td>GPT-2 sampling + CFG in S2A</td><td>temperature 1.15, top-k 106, min-p 0.18, repetition penalty 1.2; accurate / expressive modes</td></tr>
+<tr><td>Fine-tunable parts</td><td>T2S full fine-tune; S2A optional; w2v-BERT, MaskGCT, Mistral embedding frozen</td><td>LoRA on the backbone; speaker encoder and DAC frozen</td></tr>
+<tr><td>Emotion / speed control</td><td>Through the reference and the CAM++ style vector</td><td>Speed parameter, emotion vector, quality values</td></tr>
+<tr><td>Vietnamese in pretraining</td><td>Not reported, mainly zh/en</td><td>Not reported, multilingual but Vietnamese not listed</td></tr>
+<tr><td>Output sample rate</td><td>22.05 kHz</td><td>44.1 kHz</td></tr>
+<tr><td>License</td><td>Apache 2.0</td><td>Apache 2.0</td></tr>
+</table>
+
+<h2>The three differences that matter most for Vietnamese</h2>
+<ul>
+<li><b>Tokenizer.</b> ZONOS2's UTF-8 bytes need no change for Vietnamese diacritics. Confucius4's Mistral BPE splits one syllable into about 2.9 tokens, so sequences are longer and text has to be cut into 80-token segments.</li>
+<li><b>Speaker information.</b> Confucius4 has two paths, embedding and mel prompt, so it keeps timbre and style better when the reference is clean. ZONOS2 has a single vector: less sensitive to noise, but also less detailed.</li>
+<li><b>Acoustic stage.</b> Confucius4 needs an extra S2A fine-tune for natural Vietnamese prosody. ZONOS2 is one model, so one LoRA pass is enough, but it needs a larger GPU because of its 8B parameters.</li>
+</ul>
+</body></html>
