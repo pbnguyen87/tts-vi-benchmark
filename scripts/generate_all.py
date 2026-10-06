@@ -82,6 +82,7 @@ def parse_args() -> argparse.Namespace:
     g = ap.add_argument_group("generation (server defaults unless given)")
     g.add_argument("--zonos-normalize-foreign", action="store_true", help="zonos2: run its NeMo normalizer for en/zh blocks (text arrives pre-normalized by default)")
     g.add_argument("--confucius-segment-tokens", type=int, default=80)
+    g.add_argument("--confucius-config", default=None, help="confucius: inference yaml (default config/inference_config.yaml); e.g. vistral_finetune/config/inference_config_vistral.yaml")
     g.add_argument("--max-seconds", type=float, default=40.0, help="skip generations longer than this when computing RTF stats (sanity only)")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("-v", "--verbose", action="store_true")
@@ -158,7 +159,9 @@ class ConfuciusBackend:
         import yaml
         from generate_vi import _patch_local_checkpoints  # reuse the local-checkpoint resolver
 
-        cfg_path = repo / "config" / "inference_config.yaml"
+        cfg_path = Path(a.confucius_config).resolve() if a.confucius_config else repo / "config" / "inference_config.yaml"
+        if not cfg_path.is_absolute():
+            cfg_path = (repo / cfg_path).resolve()
         cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
         w2v = a.w2v_bert_path or (str(repo / "pretrained/w2v-bert-2.0") if (repo / "pretrained/w2v-bert-2.0").is_dir() else None)
         if w2v:
@@ -177,7 +180,7 @@ class ConfuciusBackend:
         self.tts = ConfuciusTTS(config_path=str(tmp), device=device)
         self.sample_rate = self.tts.sample_rate
         self.segment_tokens = a.confucius_segment_tokens
-        self.describe = {"model": "confucius4_tts", "config": str(tmp), "t2s_checkpoint": a.t2s_checkpoint or "HF default",
+        self.describe = {"model": "confucius4_tts", "config": str(tmp), "source_config": str(cfg_path), "t2s_checkpoint": a.t2s_checkpoint or "HF default",
                          "s2a_checkpoint": a.s2a_checkpoint or "HF default", "sample_rate": self.sample_rate,
                          "sampling": "server defaults: temp 0.8, top_p 0.8, top_k 30, beams 3, rep 10, nfe 25, cfg 0.7",
                          "max_text_tokens_per_segment": self.segment_tokens}
