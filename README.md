@@ -12,10 +12,10 @@ benchmark/
 │   ├── texts/                  one JSONL per block (V1, V2, CS1–CS3, XL1–XL3), normalized text
 │   │   └── testset.jsonl       merged, hashed file that drives every run
 │   └── references/             one clean 8–12 s clip + one noisy 5 s clip per speaker
-│       └── speakers.json       speaker id, language, in-training flag, clip paths
+│       └── speakers.json       speaker id, language, clip paths
 ├── outputs/
-│   ├── confucius4_tts/{A_pretrained,B_finetuned}/   wavs + manifest.jsonl + run.json
-│   └── zonos2/{A_pretrained,B_finetuned}/
+│   ├── confucius4_tts/<condition>/    wavs + manifest.jsonl + run.json; condition = pretrained, or any checkpoint label
+│   └── zonos2/<condition>/
 ├── scores/                     per-utterance CSVs and summary tables from the scoring script
 ├── listening/                  AB pair lists, rater sheets, results
 └── scripts/                    build_testset_from_s7.py, generate_all.py, score.py, make_ab_pairs.py
@@ -38,13 +38,12 @@ benchmark/
 ```bash
 python benchmark/scripts/build_testset_from_s7.py \
     --s7-dir /path/work_XXX/s7_loudnorm \
-    --train-jsonl ZONOS2/data/zonos2_vi/train.jsonl \
-    --train-speakers 5 --unseen-speakers 3 --v1 100 --v2 50 --xl3 40 --seed 42 [--dry-run]
+    --speakers 8 --v1 100 --v2 50 --xl3 40 --seed 42 [--dry-run]
 ```
 
-Selects speakers (random, seeded) and references (clean 8–12 s, noisy 5 s), V1/V2/XL3 items
-drawn at random from s7 segments — ids are not checked against the training manifests, which
-only set the `in_training` flag per speaker; segments whose wav is missing on disk are skipped — writes empty `#`-commented templates for CS1–CS3, XL1, XL2, merges everything into
+Selects `--speakers` Vietnamese speakers (random, seeded), their references (clean 8–12 s,
+noisy 5 s) and the V1/V2/XL3 items, all drawn at random from s7 segments; segments whose wav
+is missing on disk are skipped. There is no training split: every voice is zero-shot, writes empty `#`-commented templates for CS1–CS3, XL1, XL2, merges everything into
 `testset/testset.jsonl` and records its SHA-256 in `testset/summary.json`. Fill the template
 blocks by hand, then re-run the script (same seed) to refresh the merged file and hash.
 
@@ -67,15 +66,17 @@ finished files are skipped.
 
 ### 1. Generate, one command per (model, condition)
 
-```bash
-# condition A, pretrained weights, all blocks, 3 samples, noisy reference on V1 only
-Confucius4-TTS/.venv/bin/python benchmark/scripts/generate_all.py --model confucius4_tts --condition A_pretrained
-ZONOS2/.venv/bin/python        benchmark/scripts/generate_all.py --model zonos2          --condition A_pretrained
+`--condition` is a free label naming the checkpoint; outputs land in `outputs/<model>/<condition>/`.
 
-# condition B, fine-tuned weights
-Confucius4-TTS/.venv/bin/python benchmark/scripts/generate_all.py --model confucius4_tts --condition B_finetuned \
+```bash
+# released checkpoints, all blocks, 3 samples, noisy reference on V1 only
+Confucius4-TTS/.venv/bin/python benchmark/scripts/generate_all.py --model confucius4_tts --condition pretrained
+ZONOS2/.venv/bin/python        benchmark/scripts/generate_all.py --model zonos2          --condition pretrained
+
+# later, another checkpoint of the same model on the SAME test set: only the label and the weights change
+Confucius4-TTS/.venv/bin/python benchmark/scripts/generate_all.py --model confucius4_tts --condition vi_ft_v1 \
     --t2s-checkpoint Confucius4-TTS/checkpoints/t2s_vi/model.safetensors
-ZONOS2/.venv/bin/python benchmark/scripts/generate_all.py --model zonos2 --condition B_finetuned \
+ZONOS2/.venv/bin/python benchmark/scripts/generate_all.py --model zonos2 --condition vi_ft_v1 \
     --model-path ZONOS2/finetune/runs/vi_lora/merged
 
 # useful flags
@@ -92,8 +93,7 @@ accepts wildcards (`spk_en_*`).
 ### 2. Score
 
 ```bash
-python benchmark/scripts/score.py --run confucius4_tts/A_pretrained --run zonos2/A_pretrained \
-                                  --run confucius4_tts/B_finetuned  --run zonos2/B_finetuned
+python benchmark/scripts/score.py --run confucius4_tts/pretrained --run zonos2/pretrained   # thêm --run <model>/<label> cho checkpoint khác
 ```
 
 Writes `scores/<model>__<condition>.csv` (per file), `.summary.json` (mean and bootstrap 95 % CI
@@ -120,10 +120,10 @@ score on the GPU box (torch 2.9) or pass a local safetensors copy to `--asr-vi`.
 ### 3. Listening tests
 
 ```bash
-python benchmark/scripts/make_ab_pairs.py --run-a confucius4_tts/A_pretrained --run-b zonos2/A_pretrained --question cloning     --n 40
-python benchmark/scripts/make_ab_pairs.py --run-a confucius4_tts/A_pretrained --run-b zonos2/A_pretrained --question codeswitch  --n 30
-python benchmark/scripts/make_ab_pairs.py --run-a confucius4_tts/A_pretrained --run-b zonos2/A_pretrained --question crosslingual --n 30
-python benchmark/scripts/make_ab_pairs.py --run-a confucius4_tts/A_pretrained --run-b zonos2/A_pretrained --question accent      --n 40
+python benchmark/scripts/make_ab_pairs.py --run-a confucius4_tts/pretrained --run-b zonos2/pretrained --question cloning     --n 40
+python benchmark/scripts/make_ab_pairs.py --run-a confucius4_tts/pretrained --run-b zonos2/pretrained --question codeswitch  --n 30
+python benchmark/scripts/make_ab_pairs.py --run-a confucius4_tts/pretrained --run-b zonos2/pretrained --question crosslingual --n 30
+python benchmark/scripts/make_ab_pairs.py --run-a confucius4_tts/pretrained --run-b zonos2/pretrained --question accent      --n 40
 ```
 
 Each call writes `listening/<question>_<seed>/` with 16 kHz peak-normalized `pairs/`, a

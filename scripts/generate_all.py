@@ -16,18 +16,18 @@ skipped, so an interrupted run can be resumed.
 
 Examples::
 
-    # zero-shot, pretrained
-    python benchmark/scripts/generate_all.py --model confucius4_tts --condition A_pretrained
-    python benchmark/scripts/generate_all.py --model zonos2 --condition A_pretrained
+    # released checkpoints
+    python benchmark/scripts/generate_all.py --model confucius4_tts --condition pretrained
+    python benchmark/scripts/generate_all.py --model zonos2 --condition pretrained
 
-    # fine-tuned checkpoints
-    python benchmark/scripts/generate_all.py --model confucius4_tts --condition B_finetuned \\
+    # another checkpoint of the same model, same test set: new label + weights
+    python benchmark/scripts/generate_all.py --model confucius4_tts --condition vi_ft_v1 \\
         --t2s-checkpoint ../Confucius4-TTS/checkpoints/t2s_model_vi.safetensors
-    python benchmark/scripts/generate_all.py --model zonos2 --condition B_finetuned \\
+    python benchmark/scripts/generate_all.py --model zonos2 --condition vi_ft_v1 \\
         --model-path ../ZONOS2/runs/vi_podcast
 
     # plan only
-    python benchmark/scripts/generate_all.py --model zonos2 --condition A_pretrained --dry-run
+    python benchmark/scripts/generate_all.py --model zonos2 --condition pretrained --dry-run
 
 Run each model inside its own environment (Confucius4-TTS/.venv or conda env; ZONOS2 via
 ``uv run``), because their dependency pins differ.
@@ -63,7 +63,7 @@ ZONOS_LANG = {"vi": "en_us", "en": "en_us", "zh": "cmn"}  # only used when norma
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--model", required=True, choices=sorted(REPOS))
-    ap.add_argument("--condition", required=True, help="A_pretrained | B_finetuned | any label")
+    ap.add_argument("--condition", required=True, help="free label for the checkpoint, e.g. pretrained, vi_ft_v1")
     ap.add_argument("--testset", default=str(BENCH_ROOT / "testset" / "testset.jsonl"))
     ap.add_argument("--speakers", default=str(BENCH_ROOT / "testset" / "references" / "speakers.json"))
     ap.add_argument("--out-root", default=str(BENCH_ROOT / "outputs"))

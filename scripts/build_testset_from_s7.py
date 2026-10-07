@@ -2,14 +2,12 @@
 
 What it selects, randomly with a fixed seed:
 
-* **Speakers**: N "in-training" speakers (present in the fine-tuning split you pass with
-  ``--train-jsonl``/``--train-tsv``) and M "unseen" speakers (absent from it), drawn at random
-  (seeded) among speakers with enough usable segments. The training manifests only decide the
-  ``in_training`` flag: segment ids are NOT excluded from the candidate pool, items may overlap
-  the training data.
+* **Speakers**: ``--speakers`` Vietnamese speakers drawn at random (seeded) among speakers with
+  enough usable segments. Every voice is zero-shot for both models; a later fine-tuned
+  checkpoint is simply run as another condition label on the same test set.
 * **References** per speaker (``testset/references/``): one clean 8-12 s clip (best SNR / CER,
   single speaker) and one noisy 5 s clip (lowest SNR), never reused as test items.
-* **V1** in-domain sentences: ``--v1`` items from in-training speakers, drawn at random from s7.
+* **V1** in-domain sentences: ``--v1`` items from the selected speakers, drawn at random from s7.
 * Any segment whose wav is missing on disk (e.g. deleted by ``pipeline package --drop-wav``) is
   skipped and another id is drawn instead.
 * **V2** read-style / longer sentences: ``--v2`` items of 8-15 s, any Vietnamese speaker.
@@ -24,8 +22,7 @@ Usage::
 
     python benchmark/scripts/build_testset_from_s7.py \\
         --s7-dir /path/work_XXX/s7_loudnorm [--s7-dir another/s7_loudnorm ...] \\
-        --train-jsonl ZONOS2/data/zonos2_vi/train.jsonl \\
-        --train-speakers 5 --unseen-speakers 3 --v1 100 --v2 50 --xl3 40 --seed 42
+        --speakers 8 --v1 100 --v2 50 --xl3 40 --seed 42
 
 Re-running with the same seed reproduces the same selection.
 """
@@ -69,11 +66,8 @@ def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--s7-dir", action="append", required=True, help="path to <workdir>/s7_loudnorm; repeatable")
     ap.add_argument("--out-dir", default=str(BENCH_ROOT / "testset"))
-    ap.add_argument("--train-jsonl", action="append", default=[], help="fine-tune manifest(s) (ZONOS2 style) whose items/speakers count as 'in training'")
-    ap.add_argument("--train-tsv", action="append", default=[], help="fine-tune TSV(s) (Confucius4-TTS style), same purpose")
-    ap.add_argument("--train-speakers", type=int, default=5)
-    ap.add_argument("--unseen-speakers", type=int, default=3)
-    ap.add_argument("--v1", type=int, default=100, help="in-domain items from in-training speakers")
+    ap.add_argument("--speakers", type=int, default=8, help="Vietnamese speakers to pick at random (seeded)")
+    ap.add_argument("--v1", type=int, default=100, help="in-domain items from the selected speakers")
     ap.add_argument("--v2", type=int, default=50, help="8-15 s items from any Vietnamese speaker")
     ap.add_argument("--xl3", type=int, default=40, help="Vietnamese texts for foreign voices")
     ap.add_argument("--seed", type=int, default=42)
@@ -154,25 +148,6 @@ def load_segments(s7_dirs: List[Path]) -> List[dict]:
             n += 1
         log.info("%s: %d segments with audio, %d skipped (wav missing)", m, n, missing)
     return segs
-
-
-def training_ids_and_speakers(jsonls: List[str], tsvs: List[str]) -> tuple[set, set]:
-    ids, spk = set(), set()
-    for p in jsonls:
-        for r in read_jsonl(Path(p)):
-            if r.get("id"):
-                ids.add(r["id"])
-            elif r.get("audio"):
-                ids.add(Path(r["audio"]).stem)
-            if r.get("speaker_id"):
-                spk.add(r["speaker_id"])
-    for p in tsvs:
-        with Path(p).open("r", encoding="utf-8") as f:
-            for line in f:
-                cols = line.rstrip("\n").split("\t")
-                if len(cols) >= 2:
-                    ids.add(Path(cols[1]).stem)
-    return ids, spk
 
 
 def clean_text(t: Optional[str]) -> str:
@@ -323,44 +298,30 @@ def main() -> None:
     texts_dir, refs_dir = out / "texts", out / "references"
 
     segs = load_segments([Path(p).expanduser().resolve() for p in a.s7_dir])
-    train_ids, train_spk_from_manifest = training_ids_and_speakers(a.train_jsonl, a.train_tsv)
-    # speakers "in training" = speakers that own any training id (works for TSV inputs without speaker_id)
-    id2spk = {r["id"]: r.get("speaker_id") for r in segs}
-    train_spk = set(train_spk_from_manifest) | {id2spk[i] for i in train_ids if i in id2spk and id2spk[i]}
-    log.info("training set: %d ids, %d speakers", len(train_ids), len(train_spk))
-
-    # mọi segment đạt gate và còn wav đều là ứng viên; KHÔNG loại id đã có trong tập train
+    # mọi segment đạt gate và còn wav đều là ứng viên (không có khái niệm tập train)
     usable = [r for r in segs if r.get("speaker_id") and passes_gate(r, a)]
     by_spk: Dict[str, List[dict]] = defaultdict(list)
     for r in usable:
         by_spk[r["speaker_id"]].append(r)
     big = {s: u for s, u in by_spk.items() if len(u) >= a.min_utts_per_speaker}
-    n_overlap = sum(1 for r in usable if r["id"] in train_ids)
-    log.info("usable %d (%d of them also in the training manifests, kept), speakers with >=%d utts: %d",
-             len(usable), n_overlap, a.min_utts_per_speaker, len(big))
+    log.info("usable %d, speakers with >=%d utts: %d", len(usable), a.min_utts_per_speaker, len(big))
 
-    in_train = sorted(s for s in big if s in train_spk)
-    unseen = sorted(s for s in big if s not in train_spk)
-    rng.shuffle(in_train)
-    rng.shuffle(unseen)
-    if not train_spk:
-        log.warning("no training manifest given: labelling %d random speakers as 'in training' for selection purposes", a.train_speakers)
-        in_train, unseen = unseen[: a.train_speakers], unseen[a.train_speakers:]
-    sel_train = in_train[: a.train_speakers]
-    sel_unseen = unseen[: a.unseen_speakers]
-    if len(sel_train) < a.train_speakers or len(sel_unseen) < a.unseen_speakers:
-        log.warning("requested %d in-training + %d unseen speakers, found %d + %d", a.train_speakers, a.unseen_speakers, len(sel_train), len(sel_unseen))
+    cands = sorted(big)
+    rng.shuffle(cands)
+    sel = cands[: a.speakers]
+    if len(sel) < a.speakers:
+        log.warning("requested %d speakers, only %d have >=%d usable segments", a.speakers, len(sel), a.min_utts_per_speaker)
 
     # ---- references
     speakers_meta, used_ids = [], set()
     ref_plan = []
-    for kind, spks in (("in_training", sel_train), ("unseen", sel_unseen)):
-        for s in spks:
+    for s in sel:
+        if True:
             clean, noisy = pick_references(big[s], a)
             used_ids.update({clean["id"], noisy["id"]})
             spk_id = f"spk_{s}"
             speakers_meta.append({
-                "speaker_id": spk_id, "source_speaker": s, "language": "vi", "in_training": kind == "in_training",
+                "speaker_id": spk_id, "source_speaker": s, "language": "vi",
                 "n_usable_utts": len(big[s]),
                 "reference_clean": f"references/{spk_id}_clean.wav", "reference_clean_source": clean["id"],
                 "reference_clean_seconds": clean["duration"], "reference_clean_snr_db": clean.get("snr_db"),
@@ -385,19 +346,19 @@ def main() -> None:
             log.warning("%d candidate segments skipped: wav no longer on disk", len(cands) - len(ok))
         return ok
 
-    v1_pool = pool(sel_train)
+    v1_pool = pool(sel)
     rng.shuffle(v1_pool)
     v1 = v1_pool[: a.v1]
     used_ids.update(u["id"] for u in v1)
     v1_items = [item("V1", i + 1, u, f"spk_{u['speaker_id']}", norm(clean_text(u.get("text_normalized") or u.get("text"))), u["wav_abs"]) for i, u in enumerate(v1)]
 
-    v2_pool = [u for u in pool(sel_train + sel_unseen) if 8.0 <= u["duration"] <= 15.0]
+    v2_pool = [u for u in pool(sel) if 8.0 <= u["duration"] <= 15.0]
     rng.shuffle(v2_pool)
     v2 = v2_pool[: a.v2]
     used_ids.update(u["id"] for u in v2)
     v2_items = [item("V2", i + 1, u, f"spk_{u['speaker_id']}", norm(clean_text(u.get("text_normalized") or u.get("text"))), u["wav_abs"]) for i, u in enumerate(v2)]
 
-    xl3_pool = pool(sel_train + sel_unseen)
+    xl3_pool = pool(sel)
     rng.shuffle(xl3_pool)
     xl3 = xl3_pool[: a.xl3]
     xl3_items = []
@@ -409,16 +370,15 @@ def main() -> None:
     summary = {
         "seed": a.seed,
         "s7_dirs": [str(Path(p).resolve()) for p in a.s7_dir],
-        "segments_total": len(segs), "usable": len(usable), "usable_also_in_training": n_overlap,
-        "speakers_in_training": [s["speaker_id"] for s in speakers_meta if s["in_training"]],
-        "speakers_unseen": [s["speaker_id"] for s in speakers_meta if not s["in_training"]],
+        "segments_total": len(segs), "usable": len(usable),
+        "speakers": [s["speaker_id"] for s in speakers_meta],
         "V1": len(v1_items), "V2": len(v2_items), "XL3": len(xl3_items),
         "gates": {k: getattr(a, k) for k in ("max_cer", "min_snr_db", "min_dnsmos", "max_clipping", "min_seconds", "max_seconds", "min_utts_per_speaker")},
     }
     if a.dry_run:
         print(json.dumps(summary, indent=2, ensure_ascii=False))
         for s in speakers_meta:
-            print(f"  {s['speaker_id']:28s} in_training={s['in_training']!s:5s} utts={s['n_usable_utts']:4d}  clean_ref={s['reference_clean_seconds']:.1f}s snr={s['reference_clean_snr_db']}  noisy_ref snr={s['reference_noisy_snr_db']}")
+            print(f"  {s['speaker_id']:28s} utts={s['n_usable_utts']:4d}  clean_ref={s['reference_clean_seconds']:.1f}s snr={s['reference_clean_snr_db']}  noisy_ref snr={s['reference_noisy_snr_db']}")
         return
 
     # ---- write everything

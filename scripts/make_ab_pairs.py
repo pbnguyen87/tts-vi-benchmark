@@ -18,7 +18,7 @@ Question sets (``--question``):
 
 Example::
 
-    python benchmark/scripts/make_ab_pairs.py --run-a confucius4_tts/A_pretrained --run-b zonos2/A_pretrained \
+    python benchmark/scripts/make_ab_pairs.py --run-a confucius4_tts/pretrained --run-b zonos2/pretrained \
         --question cloning --n 40 --seed 7 --name cloning_A
 """
 

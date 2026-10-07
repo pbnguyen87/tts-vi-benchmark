@@ -25,8 +25,8 @@ Aggregation: mean and 95% bootstrap CI per (block, ref) plus the derived checks
 
 Examples::
 
-    python benchmark/scripts/score.py --run confucius4_tts/A_pretrained --run zonos2/A_pretrained
-    python benchmark/scripts/score.py --run zonos2/B_finetuned --asr-vi vinai/PhoWhisper-small --whisper openai/whisper-small --skip-utmos
+    python benchmark/scripts/score.py --run confucius4_tts/pretrained --run zonos2/pretrained
+    python benchmark/scripts/score.py --run zonos2/vi_ft_v1 --asr-vi vinai/PhoWhisper-small --whisper openai/whisper-small --skip-utmos
 """
 
 from __future__ import annotations
