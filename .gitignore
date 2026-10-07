@@ -10,3 +10,6 @@ testset/ground_truth/
 scores/*.csv
 __pycache__/
 .DS_Store
+# foreign reference clips (LibriTTS-R CC BY 4.0, AISHELL-3 Apache 2.0) are redistributable and small -> committed
+!testset/references/spk_en_*.wav
+!testset/references/spk_zh_*.wav

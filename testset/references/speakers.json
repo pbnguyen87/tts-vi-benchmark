@@ -1,0 +1,67 @@
+[
+  {
+    "speaker_id": "spk_en_m1089",
+    "language": "en",
+    "source_dataset": "mythicinfinity/libritts_r (LibriTTS-R test.clean, CC BY 4.0)",
+    "source_speaker": "1089",
+    "gender": "male",
+    "source_snr_mean": 60.8,
+    "reference_text": "The vast cycle of starry life bore his weary mind outward to its verge and inward to its centre, a distant music accompanying him outward and inward.",
+    "reference_clean": "references/spk_en_m1089_clean.wav",
+    "reference_clean_seconds": 10.8,
+    "reference_clean_source": [
+      "1089_134686_000007_000002"
+    ],
+    "reference_noisy": "references/spk_en_m1089_noisy.wav",
+    "reference_noisy_seconds": 5.0,
+    "reference_noisy_snr_db": 10.0,
+    "noisy_mode": "synthetic",
+    "synthetic_noise": "pink",
+    "sample_rate": 24000
+  },
+  {
+    "speaker_id": "spk_en_f5142",
+    "language": "en",
+    "source_dataset": "mythicinfinity/libritts_r (LibriTTS-R test.clean, CC BY 4.0)",
+    "source_speaker": "5142",
+    "gender": "female",
+    "source_snr_mean": 64.6,
+    "reference_text": "I set them down as men with undeveloped qualities, waiting (the good and evil qualities alike) for time and circumstances to bring them to their full growth.",
+    "reference_clean": "references/spk_en_f5142_clean.wav",
+    "reference_clean_seconds": 8.44,
+    "reference_clean_source": [
+      "5142_36377_000006_000006"
+    ],
+    "reference_noisy": "references/spk_en_f5142_noisy.wav",
+    "reference_noisy_seconds": 5.0,
+    "reference_noisy_snr_db": 10.0,
+    "noisy_mode": "synthetic",
+    "synthetic_noise": "pink",
+    "sample_rate": 24000
+  },
+  {
+    "speaker_id": "spk_zh_SSB0686",
+    "language": "zh",
+    "source_dataset": "AISHELL/AISHELL-3 (test, Apache 2.0)",
+    "source_speaker": "SSB0686",
+    "gender": "female",
+    "age_group": "B",
+    "accent": "north",
+    "reference_text": "一击 她说要诚实 你别那样好吗 陈奕迅的歌曲 三百九十点儿二",
+    "reference_clean": "references/spk_zh_SSB0686_clean.wav",
+    "reference_clean_seconds": 8.42,
+    "reference_clean_source": [
+      "SSB06860001",
+      "SSB06860003",
+      "SSB06860008",
+      "SSB06860012",
+      "SSB06860018"
+    ],
+    "reference_noisy": "references/spk_zh_SSB0686_noisy.wav",
+    "reference_noisy_seconds": 5.0,
+    "reference_noisy_snr_db": 10.0,
+    "noisy_mode": "synthetic",
+    "synthetic_noise": "pink",
+    "sample_rate": 24000
+  }
+]

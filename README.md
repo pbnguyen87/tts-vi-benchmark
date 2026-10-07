@@ -58,6 +58,27 @@ Noisy-reference options (`--noisy-mode`):
 `--copy-ground-truth` copies each V1/V2 source wav into `testset/ground_truth/<item_id>.wav`
 so the test set does not depend on the pipeline workdir.
 
+### Foreign reference voices (XL3)
+
+s7 only has Vietnamese voices. `scripts/add_foreign_references.py` adds the English and Mandarin
+references that XL3 (foreign voice reading Vietnamese) needs, from public datasets, and appends
+them to `speakers.json` without touching the Vietnamese entries:
+
+```bash
+pip install requests numpy soundfile scipy duckdb pyarrow
+python scripts/add_foreign_references.py --seed 42   # default: 1 EN male + 1 EN female + 1 ZH
+```
+
+| Voice | Source | How the clean 8–12 s clip is made |
+|---|---|---|
+| `spk_en_m*`, `spk_en_f*` | LibriTTS-R `test.clean` (CC BY 4.0), gender/SNR from `ylacombe/libritts_r_tags` | DuckDB reads the parquet shards over HTTPS (no token, no full download); among the cleanest speakers, one utterance that falls in the window |
+| `spk_zh_*` | AISHELL-3 `test` (Apache 2.0), northern accent | consecutive utterances of one speaker concatenated with 0.3 s gaps |
+
+Clips are 24 kHz mono PCM16, level-matched to the Vietnamese references (RMS −23 dBFS, peak ≤ −3 dBFS);
+the noisy reference is always `synthetic` (pink noise, `--snr-db 10`). These clips are small and
+redistributable, so they are committed (`testset/references/spk_en_*.wav`, `spk_zh_*.wav`); the
+Vietnamese references stay git-ignored. Re-running with the same seed picks the same speakers.
+
 ## Running the benchmark (GPU box)
 
 Each script uses the model's own virtualenv for generation and any env with `transformers`,
