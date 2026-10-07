@@ -42,8 +42,9 @@ python benchmark/scripts/build_testset_from_s7.py \
     --train-speakers 5 --unseen-speakers 3 --v1 100 --v2 50 --xl3 40 --seed 42 [--dry-run]
 ```
 
-Selects speakers, references (clean 8–12 s, noisy 5 s), V1/V2/XL3 items from held-out s7
-segments, writes empty `#`-commented templates for CS1–CS3, XL1, XL2, merges everything into
+Selects speakers (random, seeded) and references (clean 8–12 s, noisy 5 s), V1/V2/XL3 items
+drawn at random from s7 segments — ids are not checked against the training manifests, which
+only set the `in_training` flag per speaker; segments whose wav is missing on disk are skipped — writes empty `#`-commented templates for CS1–CS3, XL1, XL2, merges everything into
 `testset/testset.jsonl` and records its SHA-256 in `testset/summary.json`. Fill the template
 blocks by hand, then re-run the script (same seed) to refresh the merged file and hash.
 
