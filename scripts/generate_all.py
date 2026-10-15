@@ -71,6 +71,10 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--samples", type=int, default=3, help="samples per (item, speaker, ref); seeds 1000+k")
     ap.add_argument("--noisy-ref-blocks", default="V1", help="blocks also generated with the noisy reference ('' = none)")
     ap.add_argument("--max-items-per-block", type=int, default=0, help="debug: cap items per block (0 = all)")
+    ap.add_argument("--max-speakers", type=int, default=0,
+                    help="cap voices per item (0 = all). Blocks without an explicit speaker list "
+                         "otherwise fan out across every Vietnamese speaker, which multiplies the "
+                         "run by 8 while testing the same text")
     ap.add_argument("--device", default=None, help="cuda | cpu (default: cuda if available)")
 
     m = ap.add_argument_group("model paths")
@@ -127,7 +131,10 @@ def plan_jobs(items: List[dict], speakers: Dict[str, dict], a: argparse.Namespac
         if a.max_items_per_block and per_block[blk] >= a.max_items_per_block:
             continue
         per_block[blk] += 1
-        for spk in expand_speakers(it, speakers):
+        spks = expand_speakers(it, speakers)
+        if a.max_speakers:
+            spks = spks[: a.max_speakers]
+        for spk in spks:
             refs = ["clean"] + (["noisy"] if blk in noisy_blocks and speakers[spk].get("reference_noisy") else [])
             for ref in refs:
                 for k in range(a.samples):

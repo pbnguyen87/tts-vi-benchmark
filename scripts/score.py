@@ -260,7 +260,14 @@ def score_file(row: dict, item: dict, S: Scorers) -> dict:
     chunks = []
     if S.whisper is not None:
         want_ts = S.want_consistency and blk in CS_BLOCKS
-        hyp, _, chunks = S.transcribe(S.whisper, wav, lang, timestamps=want_ts)
+        try:
+            hyp, _, chunks = S.transcribe(S.whisper, wav, lang, timestamps=want_ts)
+        except Exception as e:  # noqa: BLE001
+            # Word-level timestamps crash inside the transformers ASR pipeline on some
+            # outputs (cross-attention length vs token count). Only cs_consistency
+            # needs them, so fall back rather than lose cer, wer and en_recall.
+            log.debug("word timestamps failed for %s: %s", row.get("file"), e)
+            hyp, _, chunks = S.transcribe(S.whisper, wav, lang, timestamps=False)
         hypn = norm_text(hyp, lang)
         r["wer_ws"] = wer(ref_text, hypn)
         r["cer_ws"] = cer(ref_text, hypn)
@@ -299,8 +306,14 @@ def score_file(row: dict, item: dict, S: Scorers) -> dict:
                 (en_parts if w in ew else vi_parts).append(seg)
             if en_parts and vi_parts:
                 en_wav, vi_wav = np.concatenate(en_parts), np.concatenate(vi_parts)
-                if len(en_wav) > 4000 and len(vi_wav) > 4000:  # >= 0.25 s each
-                    r["cs_consistency"] = cosine(S.embed_wavlm(en_wav), S.embed_wavlm(vi_wav))
+                if len(en_wav) > 8000 and len(vi_wav) > 8000:  # >= 0.5 s each
+                    # Never let this one metric sink the whole row: the speaker model
+                    # can throw a shape error on short spans, and that used to discard
+                    # cer, wer and en_recall for every code-switching file.
+                    try:
+                        r["cs_consistency"] = cosine(S.embed_wavlm(en_wav), S.embed_wavlm(vi_wav))
+                    except Exception as e:  # noqa: BLE001
+                        log.debug("cs_consistency failed for %s: %s", row.get("file"), e)
 
     # quality and cost
     r["utmos"] = S.mos(wav)
@@ -448,6 +461,7 @@ def main() -> None:
                 res = score_file(r, items.get(r["item"], {"text": r["text"], "language": r.get("lang")}), S)
             except Exception as exc:  # noqa: BLE001
                 log.warning("score failed for %s: %s", r["file"], exc)
+                log.debug("traceback", exc_info=True)
                 res = {}
             scored.append({**base, **res})
             if i % 25 == 0 or i == len(rows):
